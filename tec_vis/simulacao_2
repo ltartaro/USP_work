@@ -1,0 +1,353 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jul 19 16:32:35 2020
+
+@author: lucas
+
+Créditos ao Professor Paulo Polito por fornecer rotinas para o código.
+"""
+
+import matplotlib.pyplot as plt
+import xarray as xr
+import glob 
+import numpy as np 
+from mpl_toolkits.basemap import Basemap
+import datetime
+import matplotlib.dates as mdates
+import gsw as gs #Para calculo de variaveis geofisicas
+#vou utilizar o calculo de sima0 gsw.density.sigma0(SA,CT), SA salinidade /00 e temperatura
+#        ----     Rotina para pegar indice do valor próximo       ----        #
+
+def argnear(vetor,valor,erro=0):
+    vetor = np.array(vetor)
+    dif = np.abs(vetor-(valor+erro))
+    coordenada = np.argmin(dif)
+    return coordenada
+
+#             ------      Rotina para Montar MAPA       -----                #
+
+def fazendo_mapa(lon,lat):
+    Map1 = Basemap(projection='cyl', resolution='l',
+               lat_0=lat.mean(), lon_0=lon.mean(),
+               llcrnrlat=lat.min(), urcrnrlat=lat.max(),
+               llcrnrlon=lon.min(), urcrnrlon=lon.max())
+    mlon, mlat = Map1(lon, lat)
+
+    Map1.drawcoastlines(linewidth=0.5, color='#3333aa')
+    Map1.fillcontinents(color='#bcab77', lake_color='#888899')
+    Map1.drawmapboundary(fill_color='#aaaaaa')
+    Map1.drawmeridians(np.arange(np.floor(lon.min()), np.ceil(lon.max()), 5),
+                   labels=[0, 0, 0, 1], fontsize=10, color='#888888')
+
+    Map1.drawparallels(np.arange(np.floor(lat.min()), np.ceil(lat.max()), 5),
+                   labels=[1, 0, 0, 0], fontsize=10, color='#888888')
+
+    return(Map1)
+
+#            ----       Rotina para buscar os dados       ----               #
+
+#Buscando todos os caminhos para cada arquivo na pasta:
+pastas_dados = ['dados_simu_2']
+files=[]
+
+for i in pastas_dados:
+    file = glob.glob('C:/Users/lucas/Downloads/'+i+'/*.nc')
+    file = np.sort(file)
+    files.append(file)
+
+#Abrindo cada arquivo utilizando xarray e atribuindo em uma variável
+variaveis = ['argo_data','alti_data']
+
+"""
+argo_data: Dados do flutuador Argo 5903118
+altim_data: anomalia da altura da superficie da CMEMS, de 2015 a 2016.
+"""
+
+
+for j in range(len(pastas_dados)):
+    for i in range(len(files[j])):
+        vars()[variaveis[i]]=xr.open_dataset(files[j][i])
+
+#OS INDICES JÁ ESTAO ORDENADOS DE JANEIRO A JUNHO
+#%%   
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                EXERCICIO 1
+
+"""
+Obter a anomalia da altura da superficie do mar (AASM) em posições e datas mais 
+proximas de onde foi medido pelo flutuador Argo. Limitar, portanto, a série 
+temporal para esse período.
+
+-Mapa AASM com Trajetória do flutuador
+-MARCAR LEGENDA INICIO DA SERIE TEMPORAL
+-IDENTIFICAR O ARGO NA FIGURA.
+"""
+
+# Limitando as séries temporais de 2015 a 2016
+
+E=3 #Incremento de E melhora a visualização do mapa
+
+argo_ind = np.where((argo_data.JULD.values>=np.datetime64('2015-01')) &
+                      (argo_data.JULD.values<=np.datetime64('2017')))
+
+alti_time_ind = np.where((alti_data.time.values>=np.datetime64('2015-01')) &
+                      (alti_data.time.values<=np.datetime64('2017')))
+
+alti_lat_ind =np.where((alti_data.latitude.values>=np.nanmin(argo_data.LATITUDE.values[argo_ind])-E) &
+                      (alti_data.latitude.values<=np.nanmax(argo_data.LATITUDE.values[argo_ind])+E))
+
+alti_lon_ind =np.where((alti_data.longitude.values-360>=np.nanmin(argo_data.LONGITUDE.values)-E) &
+                      (alti_data.longitude.values-360<=np.nanmax(argo_data.LONGITUDE.values)+E))
+
+aasm = alti_data.sla.values[np.nanmin(alti_time_ind):np.nanmax(alti_time_ind)+1,
+                            np.nanmin(alti_lat_ind):np.nanmax(alti_lat_ind)+1,
+                            np.nanmin(alti_lon_ind):np.nanmax(alti_lon_ind)+1]
+                             #sla = sea level anomaly
+
+#GERANDO MAPA
+fig = plt.figure(figsize=(11.29,3.27),dpi=100)
+
+lon = alti_data.longitude.values-360
+
+lon = lon[alti_lon_ind]
+
+lat = alti_data.latitude.values[alti_lat_ind]
+
+lon,lat = np.meshgrid(lon, lat)
+
+aasm = np.nanmean(aasm,axis=0)
+
+Map1 = fazendo_mapa(lon,lat)
+
+levels = np.linspace(-0.1, 0.2,15)
+vscale = 60
+
+co1 = Map1.contourf(lon, lat, aasm, levels=levels, cmap='viridis', extend='both')
+cb1 = plt.colorbar(co1, format='%4.2f',fraction=0.01, extend='both')
+cb1.set_ticks(np.linspace(-0.3,0.3,7))
+cb1.set_label('m')
+
+pt1 = Map1.scatter(argo_data.LONGITUDE.values[argo_ind],
+                   argo_data.LATITUDE.values[argo_ind],
+                   color='k',label = 'Argo 5903118',s=20)
+
+pt1 = Map1.scatter(argo_data.LONGITUDE.values[np.nanmin(argo_ind)],
+                   argo_data.LATITUDE.values[np.nanmin(argo_ind)],
+                   color='r',label = '04/01/2015'
+                   ,marker='p',s=20)
+
+fig = plt.legend(bbox_to_anchor=(0., 0.8, 1., .102), loc=4,
+           ncol=2, borderaxespad=0)
+fig1 = plt.title('Trajetória Argo Atlântico Sul sobre mapa AASM')
+
+
+
+
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 2
+"""
+As curvas de densidade potencial serão contornos de dois eixos a serem construidos
+para representar a função matematica de duas variaveis.
+"""
+
+#densidade_potencial = gs.density.sigma0(salin,temper)
+
+argo_ind = np.where((argo_data.JULD.values>=np.datetime64('2015-01')) &
+                      (argo_data.JULD.values<=np.datetime64('2017')))
+
+argo_ind_jja = np.where((argo_data.JULD.values>=np.datetime64('2015-06')) &
+                      (argo_data.JULD.values<=np.datetime64('2015-09')))
+
+argo_ind_djf = np.where((argo_data.JULD.values>=np.datetime64('2015-12')) &
+                      (argo_data.JULD.values<=np.datetime64('2016-03')))
+
+salin = argo_data.PSAL.values
+temper = argo_data.TEMP.values
+
+Ran=5 # cte para ajudar na visualiação
+
+axis_x = np.linspace(np.nanmin(salin[argo_ind])-Ran/10,np.nanmax(salin[argo_ind])+Ran/10,20)
+
+axis_y = np.linspace(np.nanmin(temper[argo_ind])-Ran,np.nanmax(temper[argo_ind])+Ran,20)
+
+axis_X,axis_Y = np.meshgrid(axis_x,axis_y)
+
+densidade_potencial = gs.density.sigma0(axis_X,axis_Y)
+
+fig = plt.figure(figsize=(8.29,11.27),dpi=100)
+
+#fig = plt.contour(axis_X,axis_Y,densidade_potencial,levels=np.linspace(20,35,35))
+#fig = plt.clabel(fig, inline=True, fontsize=11,fmt='%4.1f',colors='k',manual=True)
+fig = plt.scatter(salin[argo_ind],
+                  temper[argo_ind],
+                   color='K',label = 'Completa',s=10)
+
+fig = plt.scatter(salin[argo_ind_jja],
+                  temper[argo_ind_jja],
+                   color='b',label = 'Inverno',s=10)
+
+fig = plt.scatter(salin[argo_ind_djf],
+                  temper[argo_ind_djf],
+                   color='r',label = 'Verão',s=10)
+fig = plt.xlim(33.75,35.8)
+fig = plt.ylim(2,20)
+
+fig = plt.legend(loc=2,
+           ncol=1)
+
+fig = plt.title('Densidade Potencial (-1000 kg/m³)')
+fig = plt.xlabel('Salinidade (psu)')
+fig = plt.ylabel('Temperatura ('+chr(176)+'C)')
+
+fig = plt.contour(axis_X,axis_Y,densidade_potencial+1000,levels=np.linspace(1020,1035,30))
+fig = plt.clabel(fig, inline=True, fontsize=11,fmt='%4.1f',colors='k',manual=True)
+
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 3
+"""
+Diagrama Hovmöller da AASM aproximadamente na latitude média de onde o flutuador
+Argo se deslocou dentro do período de estudo.
+"""
+
+formato = mdates.DateFormatter('%d/%m/%y') #formatacao eixo y
+
+lat_media = np.average(argo_data.LATITUDE.values)
+
+ind_lat = argnear(alti_data.latitude.values,lat_media)
+
+fig = plt.figure(figsize=(8.29,11.27),dpi=100)
+
+temp_hov = alti_data.time.values[alti_time_ind]
+
+lon_hov = alti_data.longitude.values-360
+
+lon_hov = lon_hov[np.nanmin(alti_lon_ind):np.nanmax(alti_lon_ind)+1]
+
+lon_h,tem_h = np.meshgrid(lon_hov,temp_hov)
+
+aasm_h = alti_data.sla.values[np.nanmin(alti_time_ind):np.nanmax(alti_time_ind)+1,
+                            ind_lat,
+                            np.nanmin(alti_lon_ind):np.nanmax(alti_lon_ind)+1]
+
+levels = np.linspace(-0.2, 0.3,15)
+vscale = 60
+
+fig = plt.contourf(lon_h, tem_h, aasm_h, levels=levels, cmap='viridis', extend='both')
+cb1 = plt.colorbar(co1, format='%4.2f',fraction=0.1, extend='both')
+cb1.set_ticks(np.linspace(-0.3,0.3,7))
+cb1.set_label('m')
+
+fig = plt.gca().yaxis.set_major_formatter(formato)
+
+fig = plt.scatter(argo_data.LONGITUDE.values[argo_ind],
+                   argo_data.JULD.values[argo_ind],
+                   color='r',label = 'Argo 5903118',s=20)
+fig = plt.legend(loc=4,
+           ncol=2, borderaxespad=0)
+
+fig = plt.xlim(min(lon_hov),max(lon_hov))
+fig = plt.title('Hovmöller de AASM 43'+chr(176)+'S para Atlântico Sul')
+fig = plt.xlabel('Longitude')
+fig = plt.ylabel('Data')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 4
+
+"""
+DOIS SUBPLOTS
+
+[IMPORTANTE: Não precisa interpolar]
+
+    - AASM medida NA POSIÇÃO DO ARGO em função DO TEMPO:
+        Será um gráfico de AASM em função do tempo, onde a posição do Argo
+        definirá a AASM utilizada, no tempo e localização mais próxima.
+    
+    - Profundidade da isoterma de 8C em função do tempo
+    
+"""
+
+"""
+Primeira figura:
+O algoritmo para o primeiro subplot fara o seguinte:
+    Irei observar a data de coleta do dado pelo Argo. Os dados são de 5 em 5 dias.
+    Irei pegar os dados de altimetro naquela localização para os 5 dias mais proximos.
+    A media será adicionada como um dado.
+"""
+
+#PARA SOMAR TEMPO (EXEMPLO):
+#alti_data.time.values + np.timedelta64(1, 'D')
+
+indx_temp =[]
+indx_lat = []
+indx_lon = []
+
+for i in argo_data.JULD.values[argo_ind]:
+    indx_temp.append(np.where((alti_data.time.values >= i - np.timedelta64(1, 'D')) &
+             (alti_data.time.values <= i + np.timedelta64(1, 'D'))))
+
+Dif_g = 0.25 #A dif media de resolução entre as grades
+
+for i in argo_ind[0]:
+    indx_lat.append(np.where((alti_data.latitude.values >= argo_data.LATITUDE.values[i] - Dif_g) &
+                             (alti_data.latitude.values <= argo_data.LATITUDE.values[i] + Dif_g)))
+    indx_lon.append(np.where((alti_data.longitude.values -360 >= argo_data.LONGITUDE.values[i] - Dif_g) &
+                             (alti_data.longitude.values -360 <= argo_data.LONGITUDE.values[i] + Dif_g)))
+
+aasm = []
+for i in range(len(argo_ind[0])):
+    aasm.append(np.nanmean(alti_data.sla.values[np.nanmin(indx_temp[i]):np.nanmax(indx_temp[i]),
+                                np.nanmin(indx_lat[i]):np.nanmax(indx_lat[i]),
+                                np.nanmin(indx_lon[i]):np.nanmax(indx_lon[i])]))
+    
+#LEGAL!! Agora tenho as AASM no tempo e no espaço em que o argo estava. Basta plotar:
+
+fig = plt.figure(figsize=(8.29,11.27),dpi=100)
+fig = plt.subplot(2,1,1)
+fig = plt.plot(argo_data.JULD.values[argo_ind],aasm)
+fig = plt.grid(True)
+
+fig = plt.title('AASM para a posição do Argo')
+fig = plt.xlabel('Data')
+fig = plt.ylabel('(m)')
+"""
+Segunda figura:
+    Basta utilizar argnear para encontrar a profundidade.
+"""
+
+Dif_t=0.2 #Erro de temperatura
+
+indx_temp = np.where((argo_data.TEMP.values[argo_ind] >= 8 - Dif_t) &
+                     (argo_data.TEMP.values[argo_ind] <= 8 + Dif_t))
+
+vec_temp=[]
+
+vec_prof = []
+
+for i in argo_ind[0]:
+    matrix_temp = argo_data.TEMP.values[i,min(argo_ind[0]):max(argo_ind[0])]
+    matrix_prof = argo_data.PRES.values[i,min(argo_ind[0]):max(argo_ind[0])]
+    indx_t = argnear(matrix_temp,8,erro=0)
+    vec_temp.append(matrix_temp[indx_t])
+    vec_prof.append(matrix_prof[indx_t])
+
+#### A PARTIR DE vec_temp
+
+temperaturas = np.where((np.array(vec_temp) >= 7.8) & (np.array(vec_temp) <= 8.2),np.array(vec_temp),np.nan)
+
+indices_2 = np.where(temperaturas > 0)
+
+fig = plt.subplot(2,1,2)
+
+vec_prof = np.array(vec_prof)
+
+tempo_1 = argo_data.JULD.values[argo_ind]
+
+fig = plt.plot(tempo_1[indices_2[0]],-vec_prof[indices_2[0]])
+
+fig = plt.grid(True)
+
+fig = plt.title('Profundidade da isoterma de 8'+chr(176)+'C')
+fig = plt.xlabel('Data')
+fig = plt.ylabel('(m)')
