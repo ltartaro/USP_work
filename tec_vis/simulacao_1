@@ -1,0 +1,476 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jun 11 15:33:05 2020
+
+@author: lucas
+
+Créditos ao Professor Paulo Polito por fornecer rotina para exercício 7.
+"""
+
+import matplotlib.pyplot as plt
+import xarray as xr
+import glob 
+import numpy as np 
+from mpl_toolkits.basemap import Basemap
+
+#        ----     Rotina para pegar indice do valor próximo       ----        #
+
+def argnear(vetor,valor,erro=1):
+    vetor = np.array(vetor)
+    dif = np.abs(vetor-(valor+erro))
+    coordenada = np.argmin(dif)
+    return coordenada
+
+#             ------      Rotina para Montar MAPA       -----                #
+
+def fazendo_mapa(lon,lat):
+    Map1 = Basemap(projection='cyl', resolution='l',
+               lat_0=lat.mean(), lon_0=lon.mean(),
+               llcrnrlat=lat.min(), urcrnrlat=lat.max(),
+               llcrnrlon=lon.min(), urcrnrlon=lon.max())
+    mlon, mlat = Map1(lon, lat)
+
+    Map1.drawcoastlines(linewidth=0.5, color='#3333aa')
+    Map1.fillcontinents(color='#bcab77', lake_color='#888899')
+    Map1.drawmapboundary(fill_color='#aaaaaa')
+    Map1.drawmeridians(np.arange(np.floor(lon.min()), np.ceil(lon.max()), 5),
+                   labels=[0, 0, 0, 1], fontsize=10, color='#888888')
+
+    Map1.drawparallels(np.arange(np.floor(lat.min()), np.ceil(lat.max()), 5),
+                   labels=[1, 0, 0, 0], fontsize=10, color='#888888')
+
+    return(Map1)
+
+#            ----       Rotina para buscar os dados       ----               #
+
+#Buscando todos os caminhos para cada arquivo na pasta:
+pastas_dados = ['climat_chl','climat_tsm','dado_medio_chl_2018',
+                'dado_medio_tsm_2018','oscar_vel2018']
+files=[]
+for i in pastas_dados:
+    file = glob.glob('C:/Users/lucas/Downloads/Dados_simulacao_1/'+i+'/*.nc')
+    file = np.sort(file)
+    files.append(file)
+
+#Abrindo cada arquivo utilizando xarray e atribuindo em uma variável
+variaveis = ['cli_chl','cli_tsm','med_chl','med_tsm','vel']
+
+for j in range(len(pastas_dados)):
+    dado = []
+    for i in range(len(files[j])):
+        dado.append( xr.open_dataset(files[j][i]) )
+    vars()[variaveis[j]]=dado
+
+#OS INDICES JÁ ESTAO ORDENADOS DE JANEIRO A JUNHO
+#%%   
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                EXERCICIO 1
+    """
+Plotar rapidamente mudando os indices da media de temperatura e clorofila 
+para ir modificando lat lon até que centralize o fenomeno
+    """ 
+    
+#                                    TSM
+
+indice=5
+
+clor_map = med_tsm[indice].sst.values
+lon_map = med_tsm[1].lon.values
+lat_map = med_tsm[1].lat.values
+LON,LAT = np.meshgrid(lon_map,lat_map)
+
+#Efetuando Recorte
+g = np.where((LON > -65) & (LON < -50) &
+                 (LAT > -52) & (LAT < -33))[:]
+g0m, g0M = g[0].min(), g[0].max()
+g1m, g1M = g[1].min(), g[1].max()
+lon = LON[g0m:g0M, g1m:g1M]
+lat = LAT[g0m:g0M, g1m:g1M]
+clor_map=clor_map[g0m:g0M, g1m:g1M]
+
+#MAPA TSM
+fig = plt.figure(figsize=(8.29,11.27))
+
+Map1 = fazendo_mapa(lon,lat)
+
+levels = np.linspace(0, 25,30)
+vscale = 60
+
+co1 = Map1.contourf(lon, lat, clor_map, levels=levels, cmap='coolwarm', extend='both')
+cb1 = plt.colorbar(co1, format='%4.2f',fraction=0.05, extend='both')
+
+#                                 CLOROFILA
+
+clor_map = med_chl[indice].chl_ocx.values
+clor_map=clor_map[g0m:g0M, g1m:g1M]
+
+#MAPA CLOROFILA
+fig = plt.figure(figsize=(8.29,11.27))
+
+Map1 = fazendo_mapa(lon,lat)
+
+levels = np.linspace(0, 10,30)
+
+co1 = Map1.contourf(lon, lat, clor_map, levels=levels, cmap='Spectral', extend='both')
+
+cb1 = plt.colorbar(co1, fraction=0.05,
+                   format='%4.2f',
+                   extend='both')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                EXERCICIO 2
+"""
+Programa para Realização dos mapas de médias e anomalias de TSM
+
+-Os dados médios climatológicos para cada mes de 2002 a 2020,
+ de JAN a JUN, estão na variavel:
+
+    cli_tsm
+    cli_chl
+    
+-Os dados médios de 2018 para cada mes, de JAN a JUN estao na variavel:
+    
+    med_tsm
+    med_chl
+    
+Será simples calcular a anomalia subtraindo vetorialmente as matrizes, uma vez
+que os indices correspondem aos mesmos meses
+"""
+
+meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho']
+
+tsm = [];tsm_an= []
+
+chl = [];chl_an= []
+for i in range(len(meses)):
+    #Calculando anomalia sst e atribuindo a uma variavel
+    tsm_an.append(med_tsm[i].sst.values[g0m:g0M, g1m:g1M] -
+                  cli_tsm[i].sst.values[g0m:g0M, g1m:g1M])
+    #Calculando anomalia chl e atribuindo a uma variavel
+    chl_an.append(med_chl[i].chl_ocx.values[g0m:g0M, g1m:g1M] -
+                  cli_chl[i].chl_ocx.values[g0m:g0M, g1m:g1M])
+    #Organizando variaveis de chl e sst em meses
+    tsm.append(med_tsm[i].sst.values[g0m:g0M, g1m:g1M])
+    chl.append(med_chl[i].chl_ocx.values[g0m:g0M, g1m:g1M])
+
+
+"""
+Fazendo Subplot Para gerar 12 figuras em uma página.
+Note que lat lon ja foi definido no primeiro exercicio, como todas as matrizes
+possuem a mesma resolucao, nao sera necessario calcular para cada plot
+"""
+#RECORTE DA AREA
+g = np.where((LON > -65) & (LON < -50) &
+                 (LAT > -52) & (LAT < -33))[:]
+g0m, g0M = g[0].min(), g[0].max()
+g1m, g1M = g[1].min(), g[1].max()
+lon = LON[g0m:g0M, g1m:g1M]
+lat = LAT[g0m:g0M, g1m:g1M]
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+
+
+for i in range(6):
+    fig = plt.subplot(6,2,i+1)
+    fig.annotate(meses[i],
+xy=(0.04,0.88), xycoords='axes fraction',
+textcoords='offset points',size=9,
+bbox=dict(boxstyle="round",  fc="w", ec="k"))
+    Map1 = fazendo_mapa(lon,lat)
+    levels = np.linspace(6, 27,30)
+    co1 = Map1.contourf(lon, lat, tsm[i], levels=levels, cmap='Spectral', 
+                        extend='both')
+    
+    cb1 = plt.colorbar(co1, fraction=0.05,format='%4.1f',extend='both')
+    cb1.set_ticks(np.linspace(6,27,8))
+    cb1.set_label('°C')
+for i in range(6,12):
+    fig = plt.subplot(6,2,i+1)
+    fig.annotate(meses[i-6],
+xy=(0.04,0.88), xycoords='axes fraction',
+textcoords='offset points',size=9,
+bbox=dict(boxstyle="round",  fc="w", ec="k"))
+    Map1 = fazendo_mapa(lon,lat)
+    levels = np.linspace(-4, 4,30)
+    co1 = Map1.contourf(lon, lat, tsm_an[i-6], levels=levels, cmap='Spectral',
+                        extend='both')
+    
+    cb1 = plt.colorbar(co1, fraction=0.05,format='%4.1f',extend='both')
+    cb1.set_ticks(np.linspace(-3,3,7))
+    cb1.set_label('°C')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                EXERCICIO 3
+    
+"""
+Utilizarei o mesmo código de cima, mudando apenas o valor das variaveis
+"""
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+
+
+for i in range(6):
+    fig = plt.subplot(6,2,i+1)
+    fig.annotate(meses[i],
+xy=(0.04,0.88), xycoords='axes fraction',
+textcoords='offset points',size=9,
+bbox=dict(boxstyle="round",  fc="w", ec="k"))
+    Map1 = fazendo_mapa(lon,lat)
+    levels = np.linspace(-2, 8,30)
+    co1 = Map1.contourf(lon, lat, chl[i], levels=levels, cmap='viridis', 
+                        extend='both')
+    
+    cb1 = plt.colorbar(co1, fraction=0.05,format='%4.1f',extend='both')
+    cb1.set_ticks(np.linspace(0,8,9))
+    cb1.set_label(r'mg/m$³$')
+for i in range(6,12):
+    fig = plt.subplot(6,2,i+1)
+    fig.annotate(meses[i-6],
+xy=(0.04,0.88), xycoords='axes fraction',
+textcoords='offset points',size=9,
+bbox=dict(boxstyle="round",  fc="w", ec="k"))
+    Map1 = fazendo_mapa(lon,lat)
+    levels = np.linspace(-3, 3,30)
+    co1 = Map1.contourf(lon, lat, chl_an[i-6], levels=levels, cmap='viridis', 
+                        extend='both')
+    
+    cb1 = plt.colorbar(co1, fraction=0.05,format='%4.1f',extend='both')
+    cb1.set_ticks(np.linspace(-3,3,7))
+    cb1.set_label(r'mg/m$³$')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 4
+ 
+"""
+UMA ÚNICA FIGURA DE JANEIRO
+
+CONTORNOS DA ANOMALIA DE TSM (já temos a variável tsm_an[0])
+SOBRE O MAPA DE CLOROFILA (chl[0])
+"""
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+
+Map1 = fazendo_mapa(lon,lat)
+plt.title('Anom. TSM e Média Clorofila')
+levels = np.linspace(-2, 3,6)
+co1 = Map1.contour(lon, lat, tsm_an[0], levels=[-3,-2,-1,0], colors='k',
+                   extend='both')
+
+co3 = Map1.contour(lon, lat, tsm_an[0], levels=[1,2], colors='w', extend='both')
+#cb1 = plt.colorbar(co1, fraction=0.05,format='%4.1f',extend='both')
+#cb1.set_ticks(np.linspace(-3,3,7))
+#cb1.set_label('°C')
+levels = np.linspace(-2, 8,30)
+co2 = Map1.contourf(lon, lat, chl[0], levels=levels, cmap='viridis',
+                    extend='both')
+
+cb2 = plt.colorbar(co2, fraction=0.05,format='%4.1f',extend='both')
+cb2.set_ticks(np.linspace(0,8,8))
+cb2.set_label(r'mg/m$³$')
+clab= plt.clabel(co3, inline=True, fontsize=14,fmt='%4.1f',colors='w')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 5
+
+"""
+-Fazer as duas seções zonais na frente (Um N e outro S)
+-Grafico XY de Chl x longitude
+-Plotar cada seção separada.
+-Cada seção tem 6 meses espaçados por uma constante apenas para visualizar o
+possivel deslocamento da frente na direzao zonal.
+"""
+
+"""
+Utilizarei a rotina Argnear para buscar a latitude de interesse, de forma que
+irei ajustando até que a feição fique visível e clara.
+"""
+
+"""
+Variáveis de Interesse:
+Da grade da media de clorofila que nao foram alteradas por meshgrid:
+    lon_map 
+    lat_map 
+    med_chl[0:6].chl_ocx.values
+"""
+#                               SECAO AO NORTE
+la = argnear(lat_map,-40.0)
+lo_min = argnear(lon_map,-60)
+lo_max = argnear(lon_map,-50)
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+for i in range(len(meses)):
+    var_chl = med_chl[i].chl_ocx.values[la][lo_min:lo_max]
+    fig = plt.plot(lon_map[lo_min:lo_max],(var_chl+i*3),label=meses[i])
+    fig = plt.ylim(0,18)
+fig = plt.grid(True)
+fig = plt.title('Seção ao longo da Latitude 40.0°S')
+fig = plt.legend()
+fig = plt.xlabel('Longitude')
+fig = plt.ylabel('[Clorofila] mg/m³')
+#                               SECAO AO SUL
+la = argnear(lat_map,-43.1)
+lo_min = argnear(lon_map,-65)
+lo_max = argnear(lon_map,-54)
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+for i in range(len(meses)):
+    var_chl = med_chl[i].chl_ocx.values[la][lo_min:lo_max]
+    fig = plt.plot(lon_map[lo_min:lo_max],(var_chl+i*3),label=meses[i])
+    fig = plt.ylim(0,18)
+fig = plt.grid(True)
+fig = plt.title('Seção ao longo da Latitude 43.1°S')
+fig = plt.legend()
+fig = plt.xlabel('Longitude')
+fig = plt.ylabel('[Clorofila] mg/m³')
+#%%
+#----///----///----///----///----///----///----///----///----///----///----///----#
+#                                  EXERCICIO 7
+#                                    Item A
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+
+lon_vel,lat_vel=np.meshgrid(vel[0].longitude.values-360,vel[0].latitude.values)
+
+#RECORTANDO DADOS DE VELOCIDADE
+g = np.where((lon_vel > -65) & (lon_vel < -50) &
+                 (lat_vel > -52) & (lat_vel < -33))[:]
+g0m, g0M = g[0].min(), g[0].max()
+g1m, g1M = g[1].min(), g[1].max()
+
+#RECORTANDO OS DADOS
+#Os dados de Janeiro sao os primeiros 4
+lon_vel_map = lon_vel[g0m:g0M, g1m:g1M]
+lat_vel_map = lat_vel[g0m:g0M, g1m:g1M]
+
+#CALCULANDO AS MEDIAS
+u_med_jan = np.average(vel[0].u.values[0:4][0],axis=0)
+v_med_jan = np.average(vel[0].v.values[0:4][0],axis=0)
+
+#RECORTANDO AS MEDIAS
+u_map = u_med_jan[g0m:g0M, g1m:g1M]
+v_map = v_med_jan[g0m:g0M, g1m:g1M]
+
+vscale = 10
+
+fig=plt.quiver(lon_vel_map, lat_vel_map, u_map, v_map,scale=vscale)
+#DECLAR MAPA
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+plt.title('Média Clorofila e Vetor Velocidade')
+Map1 = fazendo_mapa(lon,lat)
+
+levels = np.linspace(-2, 8,30)
+co2 = Map1.contourf(lon, lat, chl[0], levels=levels, cmap='viridis',
+                    extend='both')
+
+cb2 = plt.colorbar(co2, fraction=0.05,format='%4.1f',extend='both')
+cb2.set_ticks(np.linspace(0,8,8))
+cb2.set_label(r'mg/m$³$')
+
+v1=Map1.quiver(lon_vel_map, lat_vel_map, u_map, v_map,scale=vscale)
+leg = plt.quiverkey(v1, 0.1, 0.95, 1, '1 m/s', labelpos='S',
+                    coordinates='axes')
+#%%
+#--///----///----///----///----///----///----///----///----///----///----///--#
+#                                  EXERCICIO 7
+#                                    Item B
+
+#                           DIVERGENTE DA VELOCIDADE
+
+# calcula gradiente numa grade regular epaçada de 1 unidade
+dudy, dudx = np.gradient(u_map)
+dvdy, dvdx = np.gradient(v_map)
+# mas o espaçmento da grade e de 4km
+
+dx = 4
+dy = 4
+
+# escala as derivadas
+dudx, dudy = dudx/dx, dudy/dy
+dvdx, dvdy = dvdx/dx, dvdy/dy
+
+# calcula divergente e rotacional
+div_vel = dudx + dvdy
+rot_vel = dvdx - dudy
+
+#Mudando unidades para visualizacao do plot. As unidades serao 1/10s
+div_vel = div_vel*1e2
+rot_vel = rot_vel*1e2
+
+#                            GRADIENTE DE TEMPERATURA
+
+dtdy,dtdx = np.gradient(tsm[0])
+
+#O espacamento da grade e de 4km
+dtdy, dtdx = dtdy/dy,  dtdx/dx
+
+#Gradiente Absoluto será
+
+DTDS = np.sqrt((dtdy**2)+(dtdx**2)) 
+
+#Mudando unidades para visualizacao do plot
+DTDS=DTDS*1e2
+
+#                   PLOTANDO MAPA DO GRADIENTE DE TEMPERATURA
+#                  SOBRE CONTORNOS DO DIVERGENTE DA VELOCIDADE
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+plt.title('Grad. TSM e Div. Velocidade')
+Map1 = fazendo_mapa(lon,lat)
+
+co1 = Map1.contour(lon_vel_map, lat_vel_map, div_vel, 
+                   levels=np.linspace(-8, 8,11),
+                   cmap='viridis',extend='both')
+
+levels = np.linspace(0, 10,30)
+co2 = Map1.contourf(lon, lat, DTDS, levels=levels, cmap='coolwarm',
+                    extend='both')
+
+cb2 = plt.colorbar(co2, fraction=0.06,format='%4.1f',extend='both')
+cb2.set_ticks(np.linspace(0,10,5))
+cb2.set_label('°C/100km')
+a = np.zeros(np.shape(chl_an[0]));a[:]= np.nan
+colorbar = Map1.contourf(lon, lat, a, levels=np.linspace(-8, 8,11),
+                         cmap='viridis', extend='both')
+
+cb3 = plt.colorbar(colorbar,orientation='horizontal', fraction=0.04,
+                   format='%4.1f',extend='both')
+
+cb3.set_ticks(np.linspace(-8, 8,11))
+cb3.set_label('0.1/s')
+#%%
+#--///----///----///----///----///----///----///----///----///----///----///--#
+#                                  EXERCICIO 7
+#                                    Item C
+
+"""
+O rotacional da velocidade já foi calculado em B. A variavel é rot_vel
+dada em 1/10s, ou 0.1s^-1
+
+A anomalia de clorofila tambem, dada por chl_an[0] para o mes de janeiro.
+
+Assim, basta plotar.
+"""
+
+fig = plt.figure(figsize=(8.27, 11.69),dpi=100)
+plt.title('Anom. Clorofila e Rot. Velocidade')
+Map1 = fazendo_mapa(lon,lat)
+co1 = Map1.contour(lon_vel_map, lat_vel_map, rot_vel,cmap='Greys',
+                   levels=np.linspace(-8, 8,11), extend='both')
+
+levels = np.linspace(-3, 3,30)
+co2 = Map1.contourf(lon, lat, chl_an[0], levels=levels, cmap='viridis',
+                    extend='both')
+
+cb2 = plt.colorbar(co2, fraction=0.06,format='%4.1f',extend='both')
+cb2.set_ticks(np.linspace(-3,3,7))
+cb2.set_label(r'mg/m$³$')
+
+a = np.zeros(np.shape(chl_an[0]));a[:]= np.nan
+colorbar = Map1.contourf(lon, lat, a, levels=np.linspace(-8, 8,11), 
+                         cmap='Greys', extend='both')
+
+cb3 = plt.colorbar(colorbar,orientation='horizontal', fraction=0.04,
+                   format='%4.1f',extend='both')
+
+cb3.set_ticks(np.linspace(-8, 8,11))
+cb3.set_label('0.1/s')
